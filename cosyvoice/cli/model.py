@@ -25,6 +25,8 @@ from cosyvoice.utils.common import fade_in_out
 from cosyvoice.utils.file_utils import convert_onnx_to_trt, export_cosyvoice2_vllm
 from cosyvoice.utils.common import TrtContextWrapper
 
+_SLEEP_TIME_S = float(os.getenv("CS_SLEEP_TIME_S", "0.1"))
+
 
 class CosyVoiceModel:
 
@@ -192,7 +194,7 @@ class CosyVoiceModel:
         if stream is True:
             token_hop_len = self.token_min_hop_len
             while True:
-                time.sleep(0.1)
+                time.sleep(_SLEEP_TIME_S)
                 if len(self.tts_speech_token_dict[this_uuid]) >= token_hop_len + self.token_overlap_len:
                     this_tts_speech_token = torch.tensor(self.tts_speech_token_dict[this_uuid][:token_hop_len + self.token_overlap_len]) \
                         .unsqueeze(dim=0)
@@ -345,7 +347,7 @@ class CosyVoice2Model(CosyVoiceModel):
             token_offset = 0
             prompt_token_pad = int(np.ceil(flow_prompt_speech_token.shape[1] / self.token_hop_len) * self.token_hop_len - flow_prompt_speech_token.shape[1])
             while True:
-                time.sleep(0.1)
+                time.sleep(_SLEEP_TIME_S)
                 this_token_hop_len = self.token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len
                 if len(self.tts_speech_token_dict[this_uuid]) - token_offset >= this_token_hop_len + self.flow.pre_lookahead_len:
                     this_tts_speech_token = torch.tensor(self.tts_speech_token_dict[this_uuid][:token_offset + this_token_hop_len + self.flow.pre_lookahead_len]).unsqueeze(dim=0)
