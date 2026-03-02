@@ -360,7 +360,6 @@ class CosyVoice2Model(CosyVoiceModel):
                                                      stream=stream,
                                                      finalize=False)
                     token_offset += this_token_hop_len
-                    self.token_hop_len = min(self.token_max_hop_len, self.token_hop_len * self.stream_scale_factor)
                     yield {'tts_speech': this_tts_speech.cpu()}
                 if self.llm_end_dict[this_uuid] is True and len(self.tts_speech_token_dict[this_uuid]) - token_offset < this_token_hop_len + self.flow.pre_lookahead_len:
                     break
