@@ -254,10 +254,10 @@ class CosyVoice2Model(CosyVoiceModel):
         self.hift = hift
         self.fp16 = fp16
         # NOTE must matching training static_chunk_size
-        self.token_hop_len = 25
+        self.token_hop_len = int(os.getenv("CV_TOKEN_HOP_LEN", "25"))
         # NOTE increase token_hop_len incrementally to avoid duplicate inference
         self.token_max_hop_len = 4 * self.token_hop_len
-        self.stream_scale_factor = 2
+        self.stream_scale_factor = int(os.getenv("CV_STREAM_SCALE_FACTOR", "2"))
         assert self.stream_scale_factor >= 1, 'stream_scale_factor should be greater than 1, change it according to your actual rtf'
         # hift cache
         self.mel_cache_len = 8
@@ -359,8 +359,9 @@ class CosyVoice2Model(CosyVoiceModel):
                                                      uuid=this_uuid,
                                                      stream=stream,
                                                      finalize=False)
-                    token_offset += this_token_hop_len
                     yield {'tts_speech': this_tts_speech.cpu()}
+                    token_offset += this_token_hop_len
+                    token_hop_len = min(self.token_max_hop_len, int(token_hop_len * self.stream_scale_factor))
                 if self.llm_end_dict[this_uuid] is True and len(self.tts_speech_token_dict[this_uuid]) - token_offset < this_token_hop_len + self.flow.pre_lookahead_len:
                     break
             p.join()
