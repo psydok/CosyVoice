@@ -406,7 +406,7 @@ class CosyVoice3Model(CosyVoice2Model):
         self.hift = hift
         self.fp16 = fp16
         # NOTE must matching training static_chunk_size
-        self.token_hop_len = 25
+        self.token_hop_len = int(os.getenv("CV_TOKEN_HOP_LEN", "25"))
         # NOTE increase token_hop_len incrementally to avoid duplicate inference
         self.token_max_hop_len = 4 * self.token_hop_len
         self.stream_scale_factor = int(os.getenv("CV_STREAM_SCALE_FACTOR", "2"))
