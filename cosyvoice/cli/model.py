@@ -310,7 +310,11 @@ class CosyVoice2Model(CosyVoiceModel):
         engine_args = EngineArgs(model=model_dir,
                                  skip_tokenizer_init=True,
                                  enable_prompt_embeds=True,
-                                 gpu_memory_utilization=0.2)
+                                 gpu_memory_utilization=float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.2")),
+                                 max_model_len=int(os.getenv("VLLM_MAX_MODEL_LEN")) if os.getenv("VLLM_MAX_MODEL_LEN") is not None else None,
+                                 max_num_batched_tokens=int(os.getenv("VLLM_MAX_NUM_BATCHED_TOKENS")) if os.getenv("VLLM_MAX_NUM_BATCHED_TOKENS") is not None else None,
+                                 max_num_seqs=int(os.getenv("VLLM_MAX_NUM_SEQS")) if os.getenv("VLLM_MAX_NUM_SEQS") is not None else None,
+                                 enable_chunked_prefill=os.getenv("VLLM_ENABLE_CHUNKED_PREFILL") == "true" if os.getenv("VLLM_ENABLE_CHUNKED_PREFILL") is not None else None)
         self.llm.vllm = LLMEngine.from_engine_args(engine_args)
         self.llm.lock = threading.Lock()
         del self.llm.llm.model.model.layers
