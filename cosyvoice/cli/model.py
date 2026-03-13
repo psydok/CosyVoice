@@ -280,6 +280,7 @@ class CosyVoice2Model(CosyVoiceModel):
         self.fp16 = fp16
         # NOTE must matching training static_chunk_size
         self.token_hop_len = int(os.getenv("CV_TOKEN_HOP_LEN", "25"))
+        self.first_token_hop_len = int(os.getenv("CV_FIRST_TOKEN_HOP_LEN", "1"))
         # hift cache
         self.mel_cache_len = 8
         self.source_cache_len = int(self.mel_cache_len * 480)
@@ -435,7 +436,7 @@ class CosyVoice2Model(CosyVoiceModel):
                 token_list, is_final = work_item
                 this_tts_speech_token = torch.tensor(token_list).unsqueeze(dim=0)
                 
-                this_token_hop_len = self.token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len
+                this_token_hop_len = self.first_token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len
                 
                 this_tts_speech = self.token2wav(token=this_tts_speech_token,
                                                  prompt_token=flow_prompt_speech_token,
@@ -468,7 +469,7 @@ class CosyVoice2Model(CosyVoiceModel):
         first_chunk_logged = False
         
         while True:
-            this_token_hop_len = self.token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len
+            this_token_hop_len = self.first_token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len
             required_len = this_token_hop_len + self.flow.pre_lookahead_len
             
             # Wait for event signal (no polling!)
@@ -700,6 +701,8 @@ class CosyVoice3Model(CosyVoice2Model):
         self.fp16 = fp16
         # NOTE must matching training static_chunk_size
         self.token_hop_len = int(os.getenv("CV_TOKEN_HOP_LEN", "25"))
+        self.first_token_hop_len = int(os.getenv("CV_FIRST_TOKEN_HOP_LEN", "1"))
+
         # rtf and decoding related
         self.llm_context = torch.cuda.stream(torch.cuda.Stream(self.device)) if torch.cuda.is_available() else nullcontext()
         self.flow_context = torch.cuda.stream(torch.cuda.Stream(self.device)) if torch.cuda.is_available() else nullcontext()
