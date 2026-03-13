@@ -28,6 +28,8 @@ from cosyvoice.utils.file_utils import convert_onnx_to_trt, export_cosyvoice2_vl
 from cosyvoice.utils.common import TrtContextWrapper
 
 
+_SLEEP_TIME_S = float(os.getenv("CV_SLEEP_TIME_S", "0.01"))
+
 class CosyVoiceModel:
 
     def __init__(self,
@@ -280,7 +282,7 @@ class CosyVoice2Model(CosyVoiceModel):
         self.fp16 = fp16
         # NOTE must matching training static_chunk_size
         self.token_hop_len = int(os.getenv("CV_TOKEN_HOP_LEN", "25"))
-        self.first_token_hop_len = int(os.getenv("CV_FIRST_TOKEN_HOP_LEN", "1"))
+        self.first_token_hop_len = int(os.getenv("CV_FIRST_TOKEN_HOP_LEN", "2"))
         # hift cache
         self.mel_cache_len = 8
         self.source_cache_len = int(self.mel_cache_len * 480)
@@ -436,7 +438,7 @@ class CosyVoice2Model(CosyVoiceModel):
                 token_list, is_final = work_item
                 this_tts_speech_token = torch.tensor(token_list).unsqueeze(dim=0)
                 
-                this_token_hop_len = self.first_token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len
+                this_token_hop_len = self.first_token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len * self.stream_scale_factor
                 
                 this_tts_speech = self.token2wav(token=this_tts_speech_token,
                                                  prompt_token=flow_prompt_speech_token,
@@ -464,12 +466,13 @@ class CosyVoice2Model(CosyVoiceModel):
         from LLM thread, then batches tokens for Flow processing.
         """
         token_offset = 0
-        prompt_token_pad = int(np.ceil(flow_prompt_speech_token.shape[1] / self.token_hop_len) * self.token_hop_len - flow_prompt_speech_token.shape[1])
+        L = flow_prompt_speech_token.shape[1]
+        prompt_token_pad = (int(np.ceil(L / self.token_hop_len)) * self.token_hop_len) - L
         event = self.token_ready_event[this_uuid]
         first_chunk_logged = False
         
         while True:
-            this_token_hop_len = self.first_token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len
+            this_token_hop_len = self.first_token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len * self.stream_scale_factor
             required_len = this_token_hop_len + self.flow.pre_lookahead_len
             
             # Wait for event signal (no polling!)
@@ -584,61 +587,37 @@ class CosyVoice2Model(CosyVoiceModel):
         Uses threading.Event for synchronization instead of polling.
         """
         token_offset = 0
-        prompt_token_pad = int(np.ceil(flow_prompt_speech_token.shape[1] / self.token_hop_len) * self.token_hop_len - flow_prompt_speech_token.shape[1])
-        event = self.token_ready_event[this_uuid]
-        chunk_count = 0
-        tts_start_time = time.time()
-        
+        token_hop_len = self.token_hop_len
+        prompt_token_pad = int(np.ceil(flow_prompt_speech_token.shape[1] / token_hop_len) * token_hop_len - flow_prompt_speech_token.shape[1])
         while True:
-            this_token_hop_len = self.token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len
-            required_tokens = this_token_hop_len + self.flow.pre_lookahead_len
-            
-            # Wait for event signal (no polling!)
-            wait_start = time.time()
-            event.wait()
-            event.clear()
-            wait_time = (time.time() - wait_start) * 1000
-            
-            current_tokens = len(self.tts_speech_token_dict[this_uuid])
-            llm_done = self.llm_end_dict[this_uuid]
-            
-            # Process all available chunks
-            while current_tokens - token_offset >= required_tokens:
-                chunk_count += 1
-                if chunk_count == 1:
-                    llm_time = (time.time() - tts_start_time) * 1000
-                    logging.info(f'llm: {required_tokens}_tokens={llm_time:.1f}ms (wait={wait_time:.1f}ms)')
-                
-                this_tts_speech_token = torch.tensor(self.tts_speech_token_dict[this_uuid][:token_offset + required_tokens]).unsqueeze(dim=0)
+            this_token_hop_len = self.first_token_hop_len + prompt_token_pad if token_offset == 0 else token_hop_len
+            if len(self.tts_speech_token_dict[this_uuid]) - token_offset >= this_token_hop_len + self.flow.pre_lookahead_len:
+                this_tts_speech_token = torch.tensor(self.tts_speech_token_dict[this_uuid][:token_offset + this_token_hop_len + self.flow.pre_lookahead_len]).unsqueeze(dim=0)
                 this_tts_speech = self.token2wav(token=this_tts_speech_token,
-                                                 prompt_token=flow_prompt_speech_token,
-                                                 prompt_feat=prompt_speech_feat,
-                                                 embedding=flow_embedding,
-                                                 token_offset=token_offset,
-                                                 uuid=this_uuid,
-                                                 stream=stream,
-                                                 finalize=False)
-                token_offset += this_token_hop_len
+                                                    prompt_token=flow_prompt_speech_token,
+                                                    prompt_feat=prompt_speech_feat,
+                                                    embedding=flow_embedding,
+                                                    token_offset=token_offset,
+                                                    uuid=this_uuid,
+                                                    stream=stream,
+                                                    finalize=False)
                 yield {'tts_speech': this_tts_speech.cpu()}
-                # Update for next iteration
-                this_token_hop_len = self.token_hop_len  # No padding after first chunk
-                required_tokens = this_token_hop_len + self.flow.pre_lookahead_len
-                current_tokens = len(self.tts_speech_token_dict[this_uuid])
-            
-            # Exit when LLM is done and not enough tokens for another chunk
-            if llm_done and current_tokens - token_offset < required_tokens:
+                token_offset += this_token_hop_len
+                token_hop_len = min(self.token_max_hop_len, int(token_hop_len * self.stream_scale_factor))
+            if self.llm_end_dict[this_uuid] is True and len(self.tts_speech_token_dict[this_uuid]) - token_offset < this_token_hop_len + self.flow.pre_lookahead_len:
                 break
-        
+            time.sleep(_SLEEP_TIME_S)
+
         llm_thread.join()
-        # Deal with remaining tokens
+        # deal with remain tokens, make sure inference remain token len equals token_hop_len when cache_speech is not None
         this_tts_speech_token = torch.tensor(self.tts_speech_token_dict[this_uuid]).unsqueeze(dim=0)
         this_tts_speech = self.token2wav(token=this_tts_speech_token,
-                                         prompt_token=flow_prompt_speech_token,
-                                         prompt_feat=prompt_speech_feat,
-                                         embedding=flow_embedding,
-                                         token_offset=token_offset,
-                                         uuid=this_uuid,
-                                         finalize=True)
+                                            prompt_token=flow_prompt_speech_token,
+                                            prompt_feat=prompt_speech_feat,
+                                            embedding=flow_embedding,
+                                            token_offset=token_offset,
+                                            uuid=this_uuid,
+                                            finalize=True)
         yield {'tts_speech': this_tts_speech.cpu()}
 
     def _tts_pipeline_parallel(self, this_uuid, llm_thread, flow_prompt_speech_token, prompt_speech_feat, flow_embedding, stream):
@@ -702,7 +681,8 @@ class CosyVoice3Model(CosyVoice2Model):
         # NOTE must matching training static_chunk_size
         self.token_hop_len = int(os.getenv("CV_TOKEN_HOP_LEN", "25"))
         self.first_token_hop_len = int(os.getenv("CV_FIRST_TOKEN_HOP_LEN", "1"))
-
+        self.stream_scale_factor = int(os.getenv("CV_STREAM_SCALE_FACTOR", "2"))
+        self.token_max_hop_len = self.token_hop_len * 4
         # rtf and decoding related
         self.llm_context = torch.cuda.stream(torch.cuda.Stream(self.device)) if torch.cuda.is_available() else nullcontext()
         self.flow_context = torch.cuda.stream(torch.cuda.Stream(self.device)) if torch.cuda.is_available() else nullcontext()
