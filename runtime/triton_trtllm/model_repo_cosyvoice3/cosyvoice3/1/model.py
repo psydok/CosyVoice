@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import time
 import asyncio
@@ -54,10 +55,11 @@ class TritonPythonModel:
         self.decoupled = pb_utils.using_decoupled_model_transaction_policy(self.model_config)
 
         # Streaming config
-        self.token_frame_rate = 25
+        self.token_frame_rate = int(os.getenv("CV_TOKEN_FRAME_RATE", "25"))
         self.flow_pre_lookahead_len = 3
-        self.token_hop_len = 15
+        self.token_hop_len = int(os.getenv("CV_TOKEN_HOP_LEN", "15"))
         self.token_mel_ratio = 2
+        self.top_k = int(os.getenv("LLM_TOP_K", "50"))
         self.dynamic_chunk_strategy = model_params.get("dynamic_chunk_strategy", "exponential")
         self.logger.log_info(f"CosyVoice3 BLS initialized, decoupled={self.decoupled}, "
                              f"chunk_strategy={self.dynamic_chunk_strategy}")
@@ -96,7 +98,7 @@ class TritonPythonModel:
             "max_tokens": 750,
             "temperature": 0.8,
             "top_p": 0.95,
-            "top_k": 50,
+            "top_k": self.top_k,
             "repetition_penalty": 1.1,
             "stop": ["<|eos1|>", "<|eos|>"],
             "stream": True,
@@ -151,7 +153,7 @@ class TritonPythonModel:
             "max_tokens": 750,
             "temperature": 0.8,
             "top_p": 0.95,
-            "top_k": 50,
+            "top_k": self.top_k,
             "repetition_penalty": 1.1,
             "stop": ["<|eos1|>", "<|eos|>"],
             "stream": False,
