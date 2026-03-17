@@ -12,13 +12,16 @@ stop_stage=$2
 huggingface_llm_local_dir=$cosyvoice_path/runtime/triton_trtllm/hf_cosyvoice3_llm
 cosyvoice3_official_model_dir=$cosyvoice_path/runtime/triton_trtllm/Fun-CosyVoice3-0.5B-2512
 
-trt_dtype=bfloat16
+trt_dtype=${TRT_DTYPE:-bfloat16}
 trt_weights_dir=$cosyvoice_path/runtime/triton_trtllm/trt_weights_${trt_dtype}
 trt_engines_dir=$cosyvoice_path/runtime/triton_trtllm/trt_engines_${trt_dtype}
+trtllm_max_batch_size=${TRTLLM_MAX_BATCH_SIZE:-64}
+trtllm_max_num_tokens=${TRTLLM_MAX_NUM_TOKENS:-32768}
+trtllm_kv_cache_free_gpu_memory_fraction=${TRTLLM_KV_CACHE_FREE_GPU_MEMORY_FRACTION:-0.4}
 
 model_repo_src=$cosyvoice_path/runtime/triton_trtllm/model_repo_cosyvoice3
 model_repo=$cosyvoice_path/runtime/triton_trtllm/model_repo_cosyvoice3_copy
-bls_instance_num=10
+bls_instance_num=${BLS_INSTANCE_NUM:-10}
 
 if [ $stage -le -1 ] && [ $stop_stage -ge -1 ]; then
 
@@ -50,8 +53,8 @@ if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
     echo "Building TensorRT engines"
     trtllm-build --checkpoint_dir $trt_weights_dir \
                 --output_dir $trt_engines_dir \
-                --max_batch_size 64 \
-                --max_num_tokens 32768 \
+                --max_batch_size $trtllm_max_batch_size \
+                --max_num_tokens $trtllm_max_num_tokens \
                 --gemm_plugin $trt_dtype || exit 1
 
     echo "Testing TensorRT engines"
@@ -73,11 +76,11 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
     cp -r ${model_repo_src}/audio_tokenizer $model_repo/
     cp -r ${model_repo_src}/speaker_embedding $model_repo/
 
-    MAX_QUEUE_DELAY_MICROSECONDS=0
+    MAX_QUEUE_DELAY_MICROSECONDS=${MAX_QUEUE_DELAY_MICROSECONDS:-0}
     MODEL_DIR=$cosyvoice3_official_model_dir
     LLM_TOKENIZER_DIR=$huggingface_llm_local_dir
     BLS_INSTANCE_NUM=$bls_instance_num
-    TRITON_MAX_BATCH_SIZE=1
+    TRITON_MAX_BATCH_SIZE=${TRITON_MAX_BATCH_SIZE:-1}
     DECOUPLED_MODE=True # False for offline TTS
 
     python3 scripts/fill_template.py -i ${model_repo}/cosyvoice3/config.pbtxt model_dir:${MODEL_DIR},bls_instance_num:${BLS_INSTANCE_NUM},llm_tokenizer_dir:${LLM_TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS}
@@ -90,7 +93,7 @@ fi
 
 if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
    echo "Starting CosyVoice3 Triton server and LLM using trtllm-serve"
-   CUDA_VISIBLE_DEVICES=0 mpirun -np 1 --allow-run-as-root --oversubscribe trtllm-serve serve --tokenizer $huggingface_llm_local_dir $trt_engines_dir --max_batch_size 64  --kv_cache_free_gpu_memory_fraction 0.4 &
+   CUDA_VISIBLE_DEVICES=0 mpirun -np 1 --allow-run-as-root --oversubscribe trtllm-serve serve --tokenizer $huggingface_llm_local_dir $trt_engines_dir --max_batch_size $trtllm_max_batch_size  --kv_cache_free_gpu_memory_fraction $kv_cache_free_gpu_memory_fraction &
    CUDA_VISIBLE_DEVICES=0 tritonserver --model-repository $model_repo --http-port 18000 --grpc-port 18001 --metrics-port 18002 &
    wait
 fi
