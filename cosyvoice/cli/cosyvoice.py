@@ -25,7 +25,6 @@ from cosyvoice.utils.class_utils import get_model_type
 
 
 class CosyVoice:
-
     def __init__(self, model_dir, load_jit=False, load_trt=False, fp16=False, trt_concurrent=1):
         self.model_dir = model_dir
         self.fp16 = fp16
