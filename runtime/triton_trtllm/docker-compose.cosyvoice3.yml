@@ -1,14 +1,22 @@
 services:
   tts:
     image: soar97/triton-cosyvoice:25.06
-    shm_size: '1gb'
+    shm_size: '2gb'
     ports:
       - "8000:8000"
-      - "8001:8001"
+      - "8004:8001"
       - "8002:8002"
+      - 18001:18001
+      - 18002:18002
+      - 18000:18000
     environment:
       - PYTHONIOENCODING=utf-8
       - MODEL_ID=${MODEL_ID}
+      - TRT_DTYPE=bfloat16
+      - TRTLLM_MAX_BATCH_SIZE=64
+      - TRTLLM_MAX_NUM_TOKENS=8000
+      - BLS_INSTANCE_NUM=10
+      - TRTLLM_KV_CACHE_FREE_GPU_MEMORY_FRACTION=0.4
     deploy:
       resources:
         reservations:
@@ -17,4 +25,5 @@ services:
               device_ids: ['0']
               capabilities: [gpu]
     command: >
-      /bin/bash -c "cd /workspace && git clone https://github.com/FunAudioLLM/CosyVoice.git && cd CosyVoice && git submodule update --init --recursive && cd runtime/triton_trtllm && bash run_cosyvoice3.sh 0 3"
+      /bin/bash -c "cd /workspace && git clone https://github.com/psydok/CosyVoice.git && cd CosyVoice && git submodule update --init --recursive && cd runtime/triton_trtllm && bash run_cosyvoice3.sh 0 3"
+    
