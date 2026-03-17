@@ -93,7 +93,7 @@ fi
 
 if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
    echo "Starting CosyVoice3 Triton server and LLM using trtllm-serve"
-   CUDA_VISIBLE_DEVICES=0 mpirun -np 1 --allow-run-as-root --oversubscribe trtllm-serve serve --tokenizer $huggingface_llm_local_dir $trt_engines_dir --max_batch_size $trtllm_max_batch_size  --kv_cache_free_gpu_memory_fraction $kv_cache_free_gpu_memory_fraction &
+   CUDA_VISIBLE_DEVICES=0 mpirun -np 1 --allow-run-as-root --oversubscribe trtllm-serve serve --tokenizer $huggingface_llm_local_dir $trt_engines_dir --max_batch_size $trtllm_max_batch_size  --kv_cache_free_gpu_memory_fraction $trtllm_kv_cache_free_gpu_memory_fraction &
    CUDA_VISIBLE_DEVICES=0 tritonserver --model-repository $model_repo --http-port 18000 --grpc-port 18001 --metrics-port 18002 &
    wait
 fi
