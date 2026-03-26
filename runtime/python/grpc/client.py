@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+from pathlib import Path
 import sys
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('{}/../../..'.format(ROOT_DIR))
@@ -42,8 +43,8 @@ def main():
             zero_shot_request = cosyvoice_pb2.zeroshotRequest()
             zero_shot_request.tts_text = args.tts_text
             zero_shot_request.prompt_text = args.prompt_text
-            prompt_speech = load_wav(args.prompt_wav, 16000)
-            zero_shot_request.prompt_audio = (prompt_speech.numpy() * (2**15)).astype(np.int16).tobytes()
+            wav = Path(args.prompt_wav)    
+            zero_shot_request.prompt_audio = wav.read_bytes()
             request.zero_shot_request.CopyFrom(zero_shot_request)
         elif args.mode == 'cross_lingual':
             logging.info('send cross_lingual request')
@@ -79,7 +80,7 @@ if __name__ == "__main__":
                         type=int,
                         default='50000')
     parser.add_argument('--mode',
-                        default='sft',
+                        default='zero_shot',
                         choices=['sft', 'zero_shot', 'cross_lingual', 'instruct'],
                         help='request mode')
     parser.add_argument('--tts_text',

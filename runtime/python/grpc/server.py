@@ -15,6 +15,7 @@ import os
 import sys
 from concurrent import futures
 import argparse
+import tempfile
 import cosyvoice_pb2
 import cosyvoice_pb2_grpc
 import logging
@@ -25,15 +26,24 @@ import numpy as np
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('{}/../../..'.format(ROOT_DIR))
 sys.path.append('{}/../../../third_party/Matcha-TTS'.format(ROOT_DIR))
-from cosyvoice.cli.cosyvoice import AutoModel
+
+from cosyvoice.cli.cosyvoice import CosyVoice3
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(message)s')
 
 
+
 class CosyVoiceServiceImpl(cosyvoice_pb2_grpc.CosyVoiceServicer):
     def __init__(self, args):
-        self.cosyvoice = AutoModel(model_dir=args.model_dir)
+        self.cosyvoice = CosyVoice3(
+            model_dir="FunAudioLLM/Fun-CosyVoice3-0.5B-2512",
+            load_trt=True,
+            load_vllm=True,
+            fp16=True,
+            trt_concurrent=3,
+        )
+        self.spk_path = None
         logging.info('grpc service initialized')
 
     def Inference(self, request, context):
@@ -42,11 +52,16 @@ class CosyVoiceServiceImpl(cosyvoice_pb2_grpc.CosyVoiceServicer):
             model_output = self.cosyvoice.inference_sft(request.sft_request.tts_text, request.sft_request.spk_id)
         elif request.HasField('zero_shot_request'):
             logging.info('get zero_shot inference request')
-            prompt_speech_16k = torch.from_numpy(np.array(np.frombuffer(request.zero_shot_request.prompt_audio, dtype=np.int16))).unsqueeze(dim=0)
-            prompt_speech_16k = prompt_speech_16k.float() / (2**15)
+            if self.spk_path is None:
+                # Caching
+                tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                tmp.write(request.zero_shot_request.prompt_audio)
+                tmp.close()
+                self.spk_path = tmp.name
+                self.cosyvoice.add_zero_shot_spk( f"You are a helpful assistant.<|endofprompt|>{request.zero_shot_request.prompt_text}", self.spk_path, "spk1")
             model_output = self.cosyvoice.inference_zero_shot(request.zero_shot_request.tts_text,
                                                               request.zero_shot_request.prompt_text,
-                                                              prompt_speech_16k)
+                                                              self.spk_path, "spk1", stream=True)
         elif request.HasField('cross_lingual_request'):
             logging.info('get cross_lingual inference request')
             prompt_speech_16k = torch.from_numpy(np.array(np.frombuffer(request.cross_lingual_request.prompt_audio, dtype=np.int16))).unsqueeze(dim=0)
@@ -81,10 +96,6 @@ if __name__ == '__main__':
                         default=50000)
     parser.add_argument('--max_conc',
                         type=int,
-                        default=4)
-    parser.add_argument('--model_dir',
-                        type=str,
-                        default='iic/CosyVoice2-0.5B',
-                        help='local path or modelscope repo id')
+                        default=64)
     args = parser.parse_args()
     main()
