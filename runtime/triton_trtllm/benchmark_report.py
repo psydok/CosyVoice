@@ -1,3 +1,8 @@
+"""
+0. сбилдите образ: cd runtime/triton_trtllm && docker build . -f Dockerfile.server -t soar97/triton-cosyvoice:25.06
+1. запустите сервис: docker compose -f docker-compose.cosyvoice3.yml up
+2. запустите прогрев и тест: bash benchmark.sh
+"""
 import argparse
 import csv
 import re
@@ -122,8 +127,8 @@ def build_rows() -> list[dict[str, str]]:
 
 
 def write_reports(rows: list[dict[str, str]]) -> None:
-    csv_path = ROOT / "report.csv"
-    xlsx_path = ROOT / "report.xlsx"
+    csv_path = ROOT / "report_trt.csv"
+    xlsx_path = ROOT / "report_trt.xlsx"
 
     with csv_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=OUTPUT_COLUMNS, delimiter=";")
