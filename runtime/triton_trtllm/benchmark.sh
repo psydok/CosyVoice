@@ -3,15 +3,16 @@ set -euo pipefail
 
 LEN_TEXT="${LEN_TEXT:-100}"
 THREADS_LIST="${THREADS_LIST:-1 2 4 8 16 32}"
-NUM_INSTANCE=32
+NUM_INSTANCE=33
 
 echo "ПРОГРЕВ..."
-python3 client_grpc.py --log-dir "./log_with_cache_text${LEN_TEXT}_threads${NUM_INSTANCE}" --num-tasks "${NUM_INSTANCE}" --use-spk2info-cache False
+# python3 client_grpc.py --log-dir "./log_with_cache_text${LEN_TEXT}_threads${NUM_INSTANCE}" --num-tasks "${NUM_INSTANCE}" --use-spk2info-cache False
 echo "ПРОГРЕВ ЗАВЕРШЕН..."
 
 for NUM_THREADS in ${THREADS_LIST}; do
-  python3 client_grpc.py --log-dir "./log_with_cache_text${LEN_TEXT}_threads${NUM_THREADS}" --num-tasks "${NUM_THREADS}" --use-spk2info-cache True
+  python3 client_grpc.py --log-dir "./log_with_cache_text${LEN_TEXT}_threads${NUM_THREADS}" --target-len-text "${LEN_TEXT}" --num-tasks "${NUM_THREADS}" --use-spk2info-cache True
 done
+
 echo "ТЕСТИРОВАНИЕ ЗАВЕРШЕНО..."
 
 python3 benchmark_report.py

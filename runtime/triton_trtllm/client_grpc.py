@@ -248,7 +248,14 @@ def get_args():
     parser.add_argument(
         "--target-text",
         type=str,
-        default="Когда вы добавили источники, нужно проиндексировать их. После этого база знаний сможет отвечать на в",
+        default="Когда вы добавили источники, нужно проиндексировать их. После этого база знаний сможет отвечать на вопросы по этим источникам. Для проверки качества и стабильности мы также используем более длинные фразы, чтобы увидеть, как меняются задержки и скорость генерации на коротких, средних и длинных текстах.",
+        help="",
+    )
+
+    parser.add_argument(
+        "--target-len-text",
+        type=int,
+        default=100,
         help="",
     )
 
@@ -704,7 +711,7 @@ async def main():
         manifest_item_list = [
             {
                 "reference_text": args.reference_text,
-                "target_text": args.target_text,
+                "target_text": args.target_text[:args.target_len_text],
                 "audio_filepath": args.reference_audio,
                 "target_audio_path": "test",
             }

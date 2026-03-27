@@ -70,9 +70,9 @@ def infer_from_folder(folder_name: str) -> dict[str, str]:
     result["Model"] = "CosyVoice3"
     text_match = TEXT_RE.search(folder_name)
     if text_match:
-        result["Text (sym.)"] = text_match.group("value")
+        result["Text (sym.)"] = int(text_match.group("value"))
     else:
-        result["Text (sym.)"] = DEFAULT_TEXT
+        result["Text (sym.)"] = int(DEFAULT_TEXT)
 
     conc_match = CONC_RE.search(folder_name)
     if conc_match:
@@ -114,15 +114,24 @@ def build_rows() -> list[dict[str, str]]:
         row["Folder"] = child.name
         threads_match = THREADS_RE.search(child.name)
         processing_time_match = PROCESSING_TIME_RE.search(text)
+        total_duration_match = re.search(r"^total_duration:\s*([0-9.]+)", text, re.MULTILINE)
         if threads_match and processing_time_match:
             threads = float(threads_match.group("value"))
             processing_time = float(processing_time_match.group(1))
             if processing_time:
-                row["RPS"] = f"{threads / processing_time:.2f}"
+                row["RPS"] = threads / processing_time
+        if processing_time_match and total_duration_match:
+            processing_time = float(processing_time_match.group(1))
+            total_duration = float(total_duration_match.group(1))
+            if processing_time:
+                row["Throughput (×RT)"] = total_duration / processing_time
         row.update(inferred)
         row.update(parse_log_metrics(text))
         rows.append(row)
-    rows.sort(key=lambda r: int(r["Conc"]) if r["Conc"] else -1)
+    rows.sort(key=lambda r: (
+        int(r["Text (sym.)"]),
+        int(r["Conc"]) if r["Conc"] else -1,
+    ))
     return rows
 
 
