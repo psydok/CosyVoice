@@ -234,7 +234,7 @@ def get_args():
     parser.add_argument(
         "--reference-audio",
         type=str,
-        default="/media/hdd/a.ikonnikova/cosy-voice/app/asset/ref.wav",
+        default="../../../app/asset/ref.wav",
         help="Path to a single audio file. It can't be specified at the same time with --manifest-dir",
     )
 

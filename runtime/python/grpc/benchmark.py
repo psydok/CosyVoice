@@ -41,7 +41,7 @@ DEFAULT_CONFIG = {
     "voices": [
         {
             "name": "ref",
-            "path": "ref.wav",
+            "path": "../../../app/asset/ref.wav",
             "prompt_text": "В лесу родилась ёлочка, в лесу она росла. Зимой и летом стройная, зелёная была. Метель ей пела песенку, спи ёлочка бай-бай. Мороз снежком укутывал, смотри не замерзай",
         },
     ],
@@ -377,6 +377,7 @@ def bench_concurrency(
     calls_per_level: int,
     text_label: str = "",
     deadline: float = 0,
+    save_dir="",
 ) -> list[dict]:
     """Benchmark concurrent requests with optional RPS limiting."""
     rows = []
@@ -411,6 +412,18 @@ def bench_concurrency(
         if s["ok"] == 0:
             print("    all calls failed", flush=True)
             continue
+
+        # manual check last wav
+        index = len(results) - 1
+        if save_dir and not results[index].get("error") and results[index].get("wav_data"):
+            p = Path(save_dir) / f"conc{conc}_{voice.name}_{text_label}_{index}.wav"
+            p.write_bytes(results[index]["wav_data"])
+    
+        # manual check first wav
+        index = 0
+        if save_dir and not results[index].get("error") and results[index].get("wav_data"):
+            p = Path(save_dir) / f"conc{conc}_{voice.name}_{text_label}_{index}.wav"
+            p.write_bytes(results[index]["wav_data"])
 
         ok_results = [r for r in results if not r.get("error")]
         total_audio = sum(r["audio_s"] for r in ok_results)
@@ -915,6 +928,7 @@ def main():
                     calls_per_level=calls_per_level,
                     text_label=label,
                     deadline=deadline,
+                    save_dir=save_dir,
                 )
             )
 
