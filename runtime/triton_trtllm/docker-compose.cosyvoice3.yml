@@ -1,0 +1,33 @@
+services:
+  tts:
+    image: soar97/triton-cosyvoice:25.06
+    shm_size: '2gb'
+    ports:
+      - "8000:8000"
+      - "8004:8001"
+      - "8002:8002"
+      - 18001:18001
+      - 18002:18002
+      - 18000:18000
+    environment:
+      - PYTHONIOENCODING=utf-8
+      - MODEL_ID=${MODEL_ID}
+      - TRT_DTYPE=bfloat16
+      - TRTLLM_MAX_BATCH_SIZE=64
+      - TRITON_MAX_BATCH_SIZE=1
+      - MAX_QUEUE_DELAY_MICROSECONDS=0 # 1000 = 1ms, 50000 = 50ms
+      - TRTLLM_MAX_NUM_TOKENS=8000
+      - BLS_INSTANCE_NUM=1
+      - TRTLLM_KV_CACHE_FREE_GPU_MEMORY_FRACTION=0.4
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['2', '3']
+              capabilities: [gpu]
+    volumes:
+      - /media/hdd/a.ikonnikova/cosy-voice/MyCosyVoice/runtime/triton_trtllm:/workspace/CosyVoice/runtime/triton_trtllm
+    command: >
+      /bin/bash -c "cd CosyVoice/runtime/triton_trtllm && bash run_cosyvoice3.sh 0 3"
+    

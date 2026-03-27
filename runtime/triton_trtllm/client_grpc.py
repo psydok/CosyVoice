@@ -227,28 +227,28 @@ def get_args():
     parser.add_argument(
         "--server-port",
         type=int,
-        default=8001,
+        default=18001,
         help="Grpc port of the triton server, default is 8001",
     )
 
     parser.add_argument(
         "--reference-audio",
         type=str,
-        default=None,
+        default="/media/hdd/a.ikonnikova/cosy-voice/app/asset/ref.wav",
         help="Path to a single audio file. It can't be specified at the same time with --manifest-dir",
     )
 
     parser.add_argument(
         "--reference-text",
         type=str,
-        default="",
+        default="В лесу родилась ёлочка, в лесу она росла. Зимой и летом стройная, зелёная была. Метель ей пела песенку, спи ёлочка бай-бай. Мороз снежком укутывал, смотри не замерзай",
         help="",
     )
 
     parser.add_argument(
         "--target-text",
         type=str,
-        default="",
+        default="Когда вы добавили источники, нужно проиндексировать их. После этого база знаний сможет отвечать на в",
         help="",
     )
 
@@ -277,10 +277,11 @@ def get_args():
     parser.add_argument(
         "--model-name",
         type=str,
-        default="f5_tts",
+        default="cosyvoice3",
         choices=[
             "f5_tts",
             "spark_tts",
+            "cosyvoice3",
             "cosyvoice2",
             "cosyvoice2_dit"],
         help="triton model_repo module name to request",
@@ -319,7 +320,7 @@ def get_args():
     parser.add_argument(
         "--mode",
         type=str,
-        default="offline",
+        default="streaming",
         choices=["offline", "streaming"],
         help="Select offline or streaming benchmark mode."
     )
@@ -404,7 +405,7 @@ def prepare_request_input_output(
 
     outputs = [protocol_client.InferRequestedOutput("waveform")]
     if use_spk2info_cache:
-        inputs = inputs[-1:]
+        inputs = inputs[2:]
     return inputs, outputs
 
 
@@ -700,8 +701,6 @@ async def main():
         raise ValueError(f"Invalid mode: {args.mode}")
 
     if args.reference_audio:
-        args.num_tasks = 1
-        args.log_interval = 1
         manifest_item_list = [
             {
                 "reference_text": args.reference_text,
@@ -748,7 +747,7 @@ async def main():
     args.use_spk2info_cache = args.use_spk2info_cache == "True" or args.use_spk2info_cache == "true"
     tasks = []
     start_time = time.time()
-    for i in range(num_tasks):
+    for i in range(args.num_tasks):
         if args.mode == "offline":
             task = asyncio.create_task(
                 send(
@@ -767,7 +766,7 @@ async def main():
         elif args.mode == "streaming":
             task = asyncio.create_task(
                 send_streaming(
-                    manifest_item_list[i],
+                    manifest_item_list[0],
                     name=f"task-{i}",
                     server_url=url,
                     protocol_client=protocol_client,
