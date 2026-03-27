@@ -17,7 +17,7 @@ services:
       - TRITON_MAX_BATCH_SIZE=1
       - MAX_QUEUE_DELAY_MICROSECONDS=0 # 1000 = 1ms, 50000 = 50ms
       - TRTLLM_MAX_NUM_TOKENS=8000
-      - BLS_INSTANCE_NUM=1
+      - BLS_INSTANCE_NUM=32
       - TRTLLM_KV_CACHE_FREE_GPU_MEMORY_FRACTION=0.4
     deploy:
       resources:
@@ -27,7 +27,7 @@ services:
               device_ids: ['2', '3']
               capabilities: [gpu]
     volumes:
-      - /media/hdd/a.ikonnikova/cosy-voice/MyCosyVoice/runtime/triton_trtllm:/workspace/CosyVoice/runtime/triton_trtllm
+      - ./:/workspace/CosyVoice/runtime/triton_trtllm
     command: >
       /bin/bash -c "cd CosyVoice/runtime/triton_trtllm && bash run_cosyvoice3.sh 0 3"
     
