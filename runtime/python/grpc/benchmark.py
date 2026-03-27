@@ -3,15 +3,15 @@
 
 import argparse
 import csv
-from datetime import datetime
 import io
 import os
-import sys
 import statistics
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 import grpc
@@ -47,8 +47,12 @@ DEFAULT_CONFIG = {
     ],
     "texts": {
         "20": "Источники добавлены."[:20],
-        "100": "Когда вы добавили источники, нужно проиндексировать их. После этого база знаний сможет отвечать на вопросы по этим источникам."[:100],
-        "200": "Когда вы добавили источники, нужно проиндексировать их. После этого база знаний сможет отвечать на вопросы по этим источникам. Для проверки качества и стабильности мы также используем более длинные фразы, чтобы увидеть, как меняются задержки и скорость генерации на коротких, средних и длинных текстах."[:200],
+        "100": "Когда вы добавили источники, нужно проиндексировать их. После этого база знаний сможет отвечать на вопросы по этим источникам."[
+            :100
+        ],
+        "200": "Когда вы добавили источники, нужно проиндексировать их. После этого база знаний сможет отвечать на вопросы по этим источникам. Для проверки качества и стабильности мы также используем более длинные фразы, чтобы увидеть, как меняются задержки и скорость генерации на коротких, средних и длинных текстах."[
+            :200
+        ],
     },
     "modes": [
         {"mode": "zero_shot"},
@@ -115,8 +119,7 @@ class RateLimiter:
             self.last = time.monotonic()
 
 
-def _build_request(text: str, voice: VoiceSample, mode: str = "zero_shot",
-                   instruct_text: str = ""):
+def _build_request(text: str, voice: VoiceSample, mode: str = "zero_shot", instruct_text: str = ""):
     request = cosyvoice_pb2.Request()
     zero_shot_request = cosyvoice_pb2.zeroshotRequest()
     zero_shot_request.tts_text = text
@@ -127,8 +130,7 @@ def _build_request(text: str, voice: VoiceSample, mode: str = "zero_shot",
     return request
 
 
-def run_one(stub, text: str, voice: VoiceSample, mode: str = "zero_shot",
-            instruct_text: str = "") -> dict:
+def run_one(stub, text: str, voice: VoiceSample, mode: str = "zero_shot", instruct_text: str = "") -> dict:
     """Single synthesis call. Returns metrics dict."""
     req = _build_request(text, voice, mode=mode, instruct_text=instruct_text)
     return _run_one_streaming_inference(stub, req, text, voice.name)
@@ -136,7 +138,7 @@ def run_one(stub, text: str, voice: VoiceSample, mode: str = "zero_shot",
 
 def _run_one_streaming_inference(stub, req, text, voice_name) -> dict:
     t0 = time.perf_counter()
-    itl_start_time = None 
+    itl_start_time = None
     ttfb_ms = None
     tts_audio = b""
 
@@ -278,8 +280,9 @@ def summarize_results(results: list[dict]) -> dict:
         "audio_dur_s_p90": _p(audio_durations_s, 90),
         "audio_dur_s_p95": _p(audio_durations_s, 95),
         "first_chunk_s_mean": statistics.mean(first_chunk_s) if first_chunk_s else 0.0,
-        "second_chunk_after_first_s_mean": statistics.mean(second_chunk_after_first_s) if second_chunk_after_first_s else 0.0,
-
+        "second_chunk_after_first_s_mean": statistics.mean(second_chunk_after_first_s)
+        if second_chunk_after_first_s
+        else 0.0,
         "itl_ms_p50": percentile(itl_ms_p50, 50),
         "itl_ms_p90": percentile(itl_ms_p90, 90),
     }
@@ -289,14 +292,15 @@ def summarize_results(results: list[dict]) -> dict:
 # Benchmark suites
 # ---------------------------------------------------------------------------
 
+
 def _check_deadline(deadline: float) -> bool:
     """Return True if deadline exceeded (0 = no deadline)."""
     return deadline > 0 and time.monotonic() > deadline
 
 
-def bench_texts(stub, voices: list[VoiceSample], texts: list,
-                repeats: int, save_dir: str = "",
-                deadline: float = 0) -> list[dict]:
+def bench_texts(
+    stub, voices: list[VoiceSample], texts: list, repeats: int, save_dir: str = "", deadline: float = 0
+) -> list[dict]:
     """Benchmark each text snippet with each voice."""
     rows = []
     for voice in voices:
@@ -318,21 +322,23 @@ def bench_texts(stub, voices: list[VoiceSample], texts: list,
             if s["ok"] == 0:
                 print(f"    {label:15s}  FAILED", flush=True)
                 continue
-            row = {"voice": voice.name, "label": label,
-                   "text_len": len(text), **s}
-            print(f"    {label:15s}  chars={len(text):3d}  "
-                  f"audio={s['audio_s_mean']:.2f}s  "
-                  f"server={s['server_ms_mean']:.0f}ms  "
-                  f"e2e_p50={s['e2e_ms_p50']:.0f}ms  "
-                  f"e2e_p90={s['e2e_ms_p90']:.0f}ms  "
-                  f"RTF={s['rtf_mean']:.3f}", flush=True)
+            row = {"voice": voice.name, "label": label, "text_len": len(text), **s}
+            print(
+                f"    {label:15s}  chars={len(text):3d}  "
+                f"audio={s['audio_s_mean']:.2f}s  "
+                f"server={s['server_ms_mean']:.0f}ms  "
+                f"e2e_p50={s['e2e_ms_p50']:.0f}ms  "
+                f"e2e_p90={s['e2e_ms_p90']:.0f}ms  "
+                f"RTF={s['rtf_mean']:.3f}",
+                flush=True,
+            )
             rows.append(row)
     return rows
 
 
-def bench_modes(stub, voice: VoiceSample, text: str,
-                modes_cfg: list[dict], repeats: int,
-                deadline: float = 0) -> list[dict]:
+def bench_modes(
+    stub, voice: VoiceSample, text: str, modes_cfg: list[dict], repeats: int, deadline: float = 0
+) -> list[dict]:
     """Compare inference modes."""
     rows = []
     for mcfg in modes_cfg:
@@ -350,19 +356,28 @@ def bench_modes(stub, voice: VoiceSample, text: str,
             print(f"  {mode:16s}  FAILED", flush=True)
             continue
         row = {"mode": mode, **s}
-        print(f"  {mode:16s}  audio={s['audio_s_mean']:.2f}s  "
-              f"server={s['server_ms_mean']:.0f}ms  "
-              f"TTFB_p50={s['ttfb_ms_p50']:.0f}ms  "
-              f"RTF={s['rtf_mean']:.3f}", flush=True)
+        print(
+            f"  {mode:16s}  audio={s['audio_s_mean']:.2f}s  "
+            f"server={s['server_ms_mean']:.0f}ms  "
+            f"TTFB_p50={s['ttfb_ms_p50']:.0f}ms  "
+            f"RTF={s['rtf_mean']:.3f}",
+            flush=True,
+        )
         rows.append(row)
     return rows
 
 
-def bench_concurrency(host: str, port: int, voice: VoiceSample, text: str,
-                      levels: list[int], rps_limit: float,
-                      calls_per_level: int,
-                      text_label: str = "",
-                      deadline: float = 0) -> list[dict]:
+def bench_concurrency(
+    host: str,
+    port: int,
+    voice: VoiceSample,
+    text: str,
+    levels: list[int],
+    rps_limit: float,
+    calls_per_level: int,
+    text_label: str = "",
+    deadline: float = 0,
+) -> list[dict]:
     """Benchmark concurrent requests with optional RPS limiting."""
     rows = []
     limiter = RateLimiter(rps_limit) if rps_limit > 0 else None
@@ -371,9 +386,12 @@ def bench_concurrency(host: str, port: int, voice: VoiceSample, text: str,
         if _check_deadline(deadline):
             print("  (time limit reached, stopping)", flush=True)
             break
-        print(f"\n  text={text_label or text[:24]!r}  concurrency={conc}" +
-              (f"  rps_limit={rps_limit}" if limiter else "") + ":",
-              flush=True)
+        print(
+            f"\n  text={text_label or text[:24]!r}  concurrency={conc}"
+            + (f"  rps_limit={rps_limit}" if limiter else "")
+            + ":",
+            flush=True,
+        )
 
         def _call(_i):
             if limiter:
@@ -409,14 +427,17 @@ def bench_concurrency(host: str, port: int, voice: VoiceSample, text: str,
             "throughput_x_rt": throughput,
             **s,
         }
-        print(f"    text={text_label or len(text)}  ok={s['ok']}/{calls_per_level}  "
-              f"duration={duration_s:.1f}s  "
-              f"rps={actual_rps:.1f}  "
-              f"e2e_mean={s['e2e_ms_mean']:.0f}ms  "
-              f"e2e_p95={s['e2e_ms_p90']:.0f}ms  "
-              f"TTFB_p50={s['ttfb_ms_p50']:.0f}ms  "
-              f"RTF={s['rtf_mean']:.3f}  "
-              f"throughput={throughput:.2f}x RT", flush=True)
+        print(
+            f"    text={text_label or len(text)}  ok={s['ok']}/{calls_per_level}  "
+            f"duration={duration_s:.1f}s  "
+            f"rps={actual_rps:.1f}  "
+            f"e2e_mean={s['e2e_ms_mean']:.0f}ms  "
+            f"e2e_p95={s['e2e_ms_p90']:.0f}ms  "
+            f"TTFB_p50={s['ttfb_ms_p50']:.0f}ms  "
+            f"RTF={s['rtf_mean']:.3f}  "
+            f"throughput={throughput:.2f}x RT",
+            flush=True,
+        )
         rows.append(row)
     return rows
 
@@ -424,6 +445,7 @@ def bench_concurrency(host: str, port: int, voice: VoiceSample, text: str,
 # ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
+
 
 def print_summary(text_rows, mode_rows, conc_rows):
     W = 105
@@ -433,50 +455,62 @@ def print_summary(text_rows, mode_rows, conc_rows):
 
     if text_rows:
         print("\n--- Text Length / Language / Voice ---")
-        print(f"{'Voice':>12s} {'Label':>15s} {'Chars':>5s} {'Audio':>7s} "
-              f"{'Srv_avg':>8s} {'E2E_avg':>8s} {'E2E_p90':>8s} "
-              f"{'TTFB_avg':>9s} {'TTFB_p95':>9s} {'RTF_avg':>8s} {'RTF_max':>8s}")
+        print(
+            f"{'Voice':>12s} {'Label':>15s} {'Chars':>5s} {'Audio':>7s} "
+            f"{'Srv_avg':>8s} {'E2E_avg':>8s} {'E2E_p90':>8s} "
+            f"{'TTFB_avg':>9s} {'TTFB_p95':>9s} {'RTF_avg':>8s} {'RTF_max':>8s}"
+        )
         for r in text_rows:
-            print(f"{r['voice']:>12s} {r['label']:>15s} {r['text_len']:>5d} "
-                  f"{r['audio_s_mean']:>6.2f}s "
-                  f"{r['server_ms_mean']:>6.0f}ms "
-                  f"{r['e2e_ms_mean']:>6.0f}ms "
-                  f"{r['e2e_ms_p90']:>6.0f}ms "
-                  f"{r['ttfb_ms_mean']:>7.0f}ms "
-                  f"{r['ttfb_ms_p90']:>7.0f}ms "
-                  f"{r['rtf_mean']:>8.3f} "
-                  f"{r['rtf_max']:>8.3f}")
+            print(
+                f"{r['voice']:>12s} {r['label']:>15s} {r['text_len']:>5d} "
+                f"{r['audio_s_mean']:>6.2f}s "
+                f"{r['server_ms_mean']:>6.0f}ms "
+                f"{r['e2e_ms_mean']:>6.0f}ms "
+                f"{r['e2e_ms_p90']:>6.0f}ms "
+                f"{r['ttfb_ms_mean']:>7.0f}ms "
+                f"{r['ttfb_ms_p90']:>7.0f}ms "
+                f"{r['rtf_mean']:>8.3f} "
+                f"{r['rtf_max']:>8.3f}"
+            )
 
     if mode_rows:
         print("\n--- Mode Comparison ---")
-        print(f"{'Mode':>16s} {'Audio':>7s} {'Srv_avg':>8s} "
-              f"{'E2E_avg':>8s} {'E2E_p90':>8s} "
-              f"{'TTFB_avg':>9s} {'TTFB_p95':>9s} {'RTF_avg':>8s}")
+        print(
+            f"{'Mode':>16s} {'Audio':>7s} {'Srv_avg':>8s} "
+            f"{'E2E_avg':>8s} {'E2E_p90':>8s} "
+            f"{'TTFB_avg':>9s} {'TTFB_p95':>9s} {'RTF_avg':>8s}"
+        )
         for r in mode_rows:
-            print(f"{r['mode']:>16s} {r['audio_s_mean']:>6.2f}s "
-                  f"{r['server_ms_mean']:>6.0f}ms "
-                  f"{r['e2e_ms_mean']:>6.0f}ms "
-                  f"{r['e2e_ms_p90']:>6.0f}ms "
-                  f"{r['ttfb_ms_mean']:>7.0f}ms "
-                  f"{r['ttfb_ms_p90']:>7.0f}ms "
-                  f"{r['rtf_mean']:>8.3f}")
+            print(
+                f"{r['mode']:>16s} {r['audio_s_mean']:>6.2f}s "
+                f"{r['server_ms_mean']:>6.0f}ms "
+                f"{r['e2e_ms_mean']:>6.0f}ms "
+                f"{r['e2e_ms_p90']:>6.0f}ms "
+                f"{r['ttfb_ms_mean']:>7.0f}ms "
+                f"{r['ttfb_ms_p90']:>7.0f}ms "
+                f"{r['rtf_mean']:>8.3f}"
+            )
 
     if conc_rows:
         print("\n--- Concurrency / Throughput ---")
-        print(f"{'Text':>8s} {'Conc':>5s} {'Calls':>6s} {'RPS':>6s} {'Duration':>7s} "
-              f"{'E2E_avg':>8s} {'E2E_p90':>8s} "
-              f"{'TTFB_avg':>9s} {'TTFB_p90':>9s} "
-              f"{'RTF_avg':>8s} {'Throughput':>12s}")
+        print(
+            f"{'Text':>8s} {'Conc':>5s} {'Calls':>6s} {'RPS':>6s} {'Duration':>7s} "
+            f"{'E2E_avg':>8s} {'E2E_p90':>8s} "
+            f"{'TTFB_avg':>9s} {'TTFB_p90':>9s} "
+            f"{'RTF_avg':>8s} {'Throughput':>12s}"
+        )
         for r in conc_rows:
-            print(f"{str(r.get('text_label', ''))[:8]:>8s} {r['concurrency']:>5d} {r['ok']:>6d} "
-                  f"{r['actual_rps']:>5.1f} "
-                  f"{r['duration_s']:>6.1f}s "
-                  f"{r['e2e_ms_mean']:>6.0f}ms "
-                  f"{r['e2e_ms_p90']:>6.0f}ms "
-                  f"{r['ttfb_ms_mean']:>7.0f}ms "
-                  f"{r['ttfb_ms_p90']:>7.0f}ms "
-                  f"{r['rtf_mean']:>8.3f} "
-                  f"{r['throughput_x_rt']:>10.2f}x RT")
+            print(
+                f"{str(r.get('text_label', ''))[:8]:>8s} {r['concurrency']:>5d} {r['ok']:>6d} "
+                f"{r['actual_rps']:>5.1f} "
+                f"{r['duration_s']:>6.1f}s "
+                f"{r['e2e_ms_mean']:>6.0f}ms "
+                f"{r['e2e_ms_p90']:>6.0f}ms "
+                f"{r['ttfb_ms_mean']:>7.0f}ms "
+                f"{r['ttfb_ms_p90']:>7.0f}ms "
+                f"{r['rtf_mean']:>8.3f} "
+                f"{r['throughput_x_rt']:>10.2f}x RT"
+            )
 
     print("\n" + "=" * W)
 
@@ -503,22 +537,46 @@ def _format_num(value, digits=0):
     return f"{value:.{digits}f}"
 
 
-
 def _safe_row(r: dict, key: str, default=""):
     return r.get(key, default)
 
 
 def build_export_rows(text_rows, mode_rows, conc_rows):
     header = [
-        "Model", "Text (sym.)", "Conc", "Calls", "RTF", "RPS",
-        "TTFB p50", "TTFB p90",
-        "ITL p50", "ITL p90",
-        "E2E p50", "E2E p90",
+        "Model",
+        "Text (sym.)",
+        "Conc",
+        "Calls",
+        "RTF",
+        "RPS",
+        "TTFB p50",
+        "TTFB p90",
+        "ITL p50",
+        "ITL p90",
+        "E2E p50",
+        "E2E p90",
         "Throughput (×RT)",
-        "Quality ОК?", "Additional",
+        "Quality ОК?",
+        "Additional",
     ]
 
-    def make_row(model, text="", conc="", calls="", rtf="", rps="", ttfb_p50="", ttfb_p90="", itl_p50="", itl_p90="", e2e_p50="", e2e_p90="", throughput="", quality="", additional=""):
+    def make_row(
+        model,
+        text="",
+        conc="",
+        calls="",
+        rtf="",
+        rps="",
+        ttfb_p50="",
+        ttfb_p90="",
+        itl_p50="",
+        itl_p90="",
+        e2e_p50="",
+        e2e_p90="",
+        throughput="",
+        quality="",
+        additional="",
+    ):
         return [
             model,
             text,
@@ -543,61 +601,67 @@ def build_export_rows(text_rows, mode_rows, conc_rows):
     rows.append(["CosyVoice3 (0.5B)"] + [""] * (len(header) - 1))
 
     for r in text_rows:
-        rows.append(make_row(
-            "CosyVoice3",
-            _safe_row(r, "text_len"),
-            _safe_row(r, "concurrency", ""),
-            _safe_row(r, "ok", ""),
-            _format_num(r["rtf_mean"], 3),
-            "",
-            _format_num(r["ttfb_ms_p50"]),
-            _format_num(r["ttfb_ms_p90"]),
-            _format_num(r["itl_ms_p50"] if "itl_ms_p50" in r else ""),
-            _format_num(r["itl_ms_p90"] if "itl_ms_p90" in r else ""),
-            _format_num(r["e2e_ms_p50"]),
-            _format_num(r["e2e_ms_p90"]),
-            "",
-            "",
-            f"voice={r.get('voice', '')}; label={r.get('label', '')}; chunks_mean={_safe_row(r,'chunk_count_mean','')}; audio_dur_p50={_safe_row(r,'audio_dur_s_p50','')}; first_chunk={_safe_row(r,'first_chunk_s_mean','')}; second_after_first={_safe_row(r,'second_chunk_after_first_s_mean','')}",
-        ))
+        rows.append(
+            make_row(
+                "CosyVoice3",
+                _safe_row(r, "text_len"),
+                _safe_row(r, "concurrency", ""),
+                _safe_row(r, "ok", ""),
+                _format_num(r["rtf_mean"], 3),
+                "",
+                _format_num(r["ttfb_ms_p50"]),
+                _format_num(r["ttfb_ms_p90"]),
+                _format_num(r["itl_ms_p50"] if "itl_ms_p50" in r else ""),
+                _format_num(r["itl_ms_p90"] if "itl_ms_p90" in r else ""),
+                _format_num(r["e2e_ms_p50"]),
+                _format_num(r["e2e_ms_p90"]),
+                "",
+                "",
+                f"voice={r.get('voice', '')}; label={r.get('label', '')}; chunks_mean={_safe_row(r, 'chunk_count_mean', '')}; audio_dur_p50={_safe_row(r, 'audio_dur_s_p50', '')}; first_chunk={_safe_row(r, 'first_chunk_s_mean', '')}; second_after_first={_safe_row(r, 'second_chunk_after_first_s_mean', '')}",
+            )
+        )
 
     for r in mode_rows:
-        rows.append(make_row(
-            _safe_row(r, "mode", "CosyVoice3"),
-            "",
-            "",
-            _safe_row(r, "ok", ""),
-            _format_num(r["rtf_mean"], 3),
-            "",
-            _format_num(r["ttfb_ms_p50"]),
-            _format_num(r["ttfb_ms_p90"]),
-            _format_num(r["itl_ms_p50"] if "itl_ms_p50" in r else ""),
-            _format_num(r["itl_ms_p90"] if "itl_ms_p90" in r else ""),
-            _format_num(r["e2e_ms_p50"]),
-            _format_num(r["e2e_ms_p90"]),
-            "",
-            "",
-            "mode comparison",
-        ))
+        rows.append(
+            make_row(
+                _safe_row(r, "mode", "CosyVoice3"),
+                "",
+                "",
+                _safe_row(r, "ok", ""),
+                _format_num(r["rtf_mean"], 3),
+                "",
+                _format_num(r["ttfb_ms_p50"]),
+                _format_num(r["ttfb_ms_p90"]),
+                _format_num(r["itl_ms_p50"] if "itl_ms_p50" in r else ""),
+                _format_num(r["itl_ms_p90"] if "itl_ms_p90" in r else ""),
+                _format_num(r["e2e_ms_p50"]),
+                _format_num(r["e2e_ms_p90"]),
+                "",
+                "",
+                "mode comparison",
+            )
+        )
 
     for r in conc_rows:
-        rows.append(make_row(
-            "CosyVoice3",
-            _safe_row(r, "text_len", ""),
-            _safe_row(r, "concurrency", ""),
-            _safe_row(r, "ok", ""),
-            _format_num(r["rtf_mean"], 3),
-            _format_num(r["actual_rps"], 2),
-            _format_num(r["ttfb_ms_p50"]),
-            _format_num(r["ttfb_ms_p90"]),
-            _format_num(r["itl_ms_p50"] if "itl_ms_p50" in r else ""),
-            _format_num(r["itl_ms_p90"] if "itl_ms_p90" in r else ""),
-            _format_num(r["e2e_ms_p50"]),
-            _format_num(r["e2e_ms_p90"]),
-            _format_num(r["throughput_x_rt"], 3),
-            "",
-            f"text={r.get('text_label', '')}; calls={r.get('ok', '')}/{r.get('total_calls', '')}; conc={r.get('concurrency', '')}",
-        ))
+        rows.append(
+            make_row(
+                "CosyVoice3",
+                _safe_row(r, "text_len", ""),
+                _safe_row(r, "concurrency", ""),
+                _safe_row(r, "ok", ""),
+                _format_num(r["rtf_mean"], 3),
+                _format_num(r["actual_rps"], 2),
+                _format_num(r["ttfb_ms_p50"]),
+                _format_num(r["ttfb_ms_p90"]),
+                _format_num(r["itl_ms_p50"] if "itl_ms_p50" in r else ""),
+                _format_num(r["itl_ms_p90"] if "itl_ms_p90" in r else ""),
+                _format_num(r["e2e_ms_p50"]),
+                _format_num(r["e2e_ms_p90"]),
+                _format_num(r["throughput_x_rt"], 3),
+                "",
+                f"text={r.get('text_label', '')}; calls={r.get('ok', '')}/{r.get('total_calls', '')}; conc={r.get('concurrency', '')}",
+            )
+        )
 
     return rows
 
@@ -631,13 +695,12 @@ def save_excel(path, text_rows, mode_rows, conc_rows):
     print(f"Results saved to {path}")
 
 
-def save_report(path, text_rows, mode_rows, conc_rows, *,
-                host, port, repeats, voices):
+def save_report(path, text_rows, mode_rows, conc_rows, *, host, port, repeats, voices):
     """Write a markdown benchmark report."""
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     lines = [
-        f"# CosyVoice3 Benchmark Report",
-        f"",
+        "# CosyVoice3 Benchmark Report",
+        "",
         f"**Date:** {ts}  ",
         f"**Server:** `{host}:{port}`  ",
         f"**Repeats per test:** {repeats}  ",
@@ -728,21 +791,19 @@ def save_report(path, text_rows, mode_rows, conc_rows, *,
 def main():
     now = datetime.now().strftime("%m_%d_%Y__%H_%M_%S")
     parser = argparse.ArgumentParser(description="CosyVoice3 gRPC Benchmark")
-    parser.add_argument("--config", type=str, default="",
-                        help="YAML config file (see benchmark_config.yaml)")
-    parser.add_argument("--csv", type=str, default=f"{now}.csv",
-                        help="Save results to CSV file")
-    parser.add_argument("--report", type=str, default="",
-                        help="Save markdown report (e.g. report.md)")
+    parser.add_argument("--config", type=str, default="", help="YAML config file (see benchmark_config.yaml)")
+    parser.add_argument("--csv", type=str, default=f"{now}.csv", help="Save results to CSV file")
+    parser.add_argument("--report", type=str, default="", help="Save markdown report (e.g. report.md)")
     parser.add_argument("--host", type=str, default=None)
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--repeats", type=int, default=None)
-    parser.add_argument("--max-duration", type=int, default=None,
-                        help="Max benchmark duration in seconds (0=unlimited)")
-    parser.add_argument("--save-audio", type=str, default=f"audios_{now}",
-                        help="Directory to save synthesized wav files")
-    parser.add_argument("--stream", action="store_true",
-                        help="Kept for compatibility with older benchmark runs")
+    parser.add_argument(
+        "--max-duration", type=int, default=None, help="Max benchmark duration in seconds (0=unlimited)"
+    )
+    parser.add_argument(
+        "--save-audio", type=str, default=f"audios_{now}", help="Directory to save synthesized wav files"
+    )
+    parser.add_argument("--stream", action="store_true", help="Kept for compatibility with older benchmark runs")
     args = parser.parse_args()
 
     # Load config
@@ -827,31 +888,35 @@ def main():
 
     if not skip.get("texts"):
         print("=== Text Length / Language / Voice ===", flush=True)
-        text_rows = bench_texts(stub, voices, texts, repeats=repeats,
-                                save_dir=save_dir, deadline=deadline)
+        text_rows = bench_texts(stub, voices, texts, repeats=repeats, save_dir=save_dir, deadline=deadline)
         text_rows = [dict(r, text_len=int(r.get("text_len", 0))) for r in text_rows]
         for r in text_rows:
             r["text_len"] = int(r.get("text_len", 0))
             r["text_label"] = str(r.get("text_len", r.get("label", "")))
 
-
     if not skip.get("modes") and modes_cfg and not _check_deadline(deadline):
         print("\n=== Mode Comparison ===", flush=True)
         mode_text = texts[1][1] if len(texts) > 1 else texts[0][1]
-        mode_rows = bench_modes(stub, voices[0], mode_text, modes_cfg,
-                                repeats=repeats, deadline=deadline)
+        mode_rows = bench_modes(stub, voices[0], mode_text, modes_cfg, repeats=repeats, deadline=deadline)
 
     if not skip.get("concurrency") and not _check_deadline(deadline) and texts:
         print("\n=== Concurrency / Throughput ===", flush=True)
         for label, conc_text in texts:
             if _check_deadline(deadline):
                 break
-            conc_rows.extend(bench_concurrency(
-                host, port, voices[0], conc_text,
-                levels=conc_levels, rps_limit=rps_limit,
-                calls_per_level=calls_per_level, text_label=label,
-                deadline=deadline))
-
+            conc_rows.extend(
+                bench_concurrency(
+                    host,
+                    port,
+                    voices[0],
+                    conc_text,
+                    levels=conc_levels,
+                    rps_limit=rps_limit,
+                    calls_per_level=calls_per_level,
+                    text_label=label,
+                    deadline=deadline,
+                )
+            )
 
     print_summary(text_rows, mode_rows, conc_rows)
 
@@ -860,9 +925,16 @@ def main():
         save_excel(str(Path(args.csv).with_suffix(".xlsx")), text_rows, mode_rows, conc_rows)
 
     if args.report:
-        save_report(args.report, text_rows, mode_rows, conc_rows,
-                    host=host, port=port, repeats=repeats,
-                    voices=[v.name for v in voices])
+        save_report(
+            args.report,
+            text_rows,
+            mode_rows,
+            conc_rows,
+            host=host,
+            port=port,
+            repeats=repeats,
+            voices=[v.name for v in voices],
+        )
 
 
 if __name__ == "__main__":
