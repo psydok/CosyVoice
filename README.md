@@ -190,13 +190,7 @@ You can run the following steps.
 ``` sh
 cd runtime/python
 docker build -t cosyvoice:v1.0 .
-# change iic/CosyVoice-300M to iic/CosyVoice-300M-Instruct if you want to use instruct inference
-# for grpc usage
-docker run -d --runtime=nvidia -p 50000:50000 cosyvoice:v1.0 /bin/bash -c "cd /opt/CosyVoice/CosyVoice/runtime/python/grpc && python3 server.py --port 50000 --max_conc 4 --model_dir iic/CosyVoice-300M && sleep infinity"
-cd grpc && python3 client.py --port 50000 --mode <sft|zero_shot|cross_lingual|instruct>
-# for fastapi usage
-docker run -d --runtime=nvidia -p 50000:50000 cosyvoice:v1.0 /bin/bash -c "cd /opt/CosyVoice/CosyVoice/runtime/python/fastapi && python3 server.py --port 50000 --model_dir iic/CosyVoice-300M && sleep infinity"
-cd fastapi && python3 client.py --port 50000 --mode <sft|zero_shot|cross_lingual|instruct>
+docker run --rm --runtime=nvidia --gpus '"device=2"' -v ./models:/root/.cache/modelscope/hub/FunAudioLLM -v ./cosy-voice/MyCosyVoice/cosyvoice:/opt/CosyVoice/CosyVoice/cosyvoice -v ./cosy-voice/MyCosyVoice/runtime/python/grpc/server.py:/opt/CosyVoice/CosyVoice/runtime/python/grpc/server.py -p 50000:50000 cosyvoice:v1.0 /bin/bash  -c "cd /opt/CosyVoice/CosyVoice/runtime/python/grpc && python3 server.py --port 50000 --max_conc 64 && sleep infinity"
 ```
 
 #### Using Nvidia TensorRT-LLM for deployment
@@ -206,7 +200,7 @@ To quick start:
 
 ``` sh
 cd runtime/triton_trtllm
-docker compose up -d
+docker compose -f docker-compose.cosyvoice3.yml up -d
 ```
 For more details, you could check [here](https://github.com/FunAudioLLM/CosyVoice/tree/main/runtime/triton_trtllm)
 
