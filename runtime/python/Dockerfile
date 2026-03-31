@@ -1,40 +1,45 @@
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04 AS base
+
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
-RUN apt update && \
-    apt install -y --no-install-recommends \
-        software-properties-common \
-        python3.10 \
-        python3.10-dev \
-        python3.10-venv \
-        python3-pip && \
-    apt-get install -y \
-        wget curl git nano ca-certificates sox libsox-dev git unzip git-lfs g++ curl && \
-    apt clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git curl wget build-essential sox libsox-dev ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
 
-WORKDIR /opt/CosyVoice
-RUN pip install --no-cache-dir -U pip==22.0.2
+RUN uv python install 3.10 && uv venv /opt/venv --python 3.10
+ENV PATH="/opt/venv/bin:$PATH"
+ENV VIRTUAL_ENV="/opt/venv"
 
-RUN sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list
-RUN apt-get update -y
-RUN apt-get -y install git unzip git-lfs g++
-RUN git lfs install
-RUN git clone --recursive https://github.com/psydok/CosyVoice.git
-# here we use python==3.10 because we cannot find an image which have both python3.8 and torch2.0.1-cu118 installed
-RUN cd CosyVoice && pip3 install -U -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com --no-cache-dir
-RUN cd CosyVoice/runtime/python/grpc && python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. cosyvoice.proto
-# Не оптимизировано просто, чтобы запустился grpc с изменениями
-RUN apt install -y cuda-toolkit-12-4
-RUN pip install vllm==v0.11.0 transformers==4.57.1 numpy==1.26.4 onnxruntime-gpu==1.23.2
-RUN pip install flashinfer-python flashinfer-cubin
-RUN pip install flashinfer-jit-cache --index-url https://flashinfer.ai/whl/cu128
-# тест flash-attn, возможно не закончен. 
-# RUN pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.3/flash_attn-2.7.3+cu12torch2.8cxx11abiTRUE-cp310-cp310-linux_x86_64.whl
+WORKDIR /opt/cosyvoice
 
-# Чтобы собрать изменения
-# COPY . CosyVoice/runtime/python
-# RUN mv /opt/CosyVoice/CosyVoice/cosyvoice /opt/CosyVoice/CosyVoice/cosyvoice_orig
+RUN uv pip install vllm[transformers,cuda]==0.17.1 --no-cache
+
+RUN uv pip install \
+    tensorrt-cu12==10.13.3.9 \
+    tensorrt-cu12-bindings==10.13.3.9 \
+    tensorrt-cu12-libs==10.13.3.9 \
+    --no-cache
+RUN uv pip install "setuptools==81.0.0" -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
+RUN uv pip install -U openai-whisper  --no-deps --no-build-isolation
+
+RUN git clone --recursive https://github.com/psydok/CosyVoice.git .
+RUN sed -i -E 's/^(.*openai-whisper.*)$/# \1/' requirements.txt
+RUN uv pip install -r requirements.txt --no-cache --index-strategy unsafe-best-match
+RUN uv pip install -U numpy==1.26.4
+
+ENV PYTHONPATH="/opt/cosyvoice:/opt/cosyvoice/third_party/Matcha-TTS"
+RUN uv pip install \
+    torch==2.10.0 torchaudio==2.10.0 \
+    --index-url https://download.pytorch.org/whl/cu128 \
+    --no-cache
+
+RUN uv pip install -U "transformers>=4.56,<5" numpy==1.26.4
+ENV FLASH_ATTENTION_TRITON_AMD_AUTOTUNE="TRUE"
+RUN uv pip install https://github.com/Dao-AILab/flash-attention.git --no-deps --no-build-isolation
+
+RUN cd runtime/python/grpc && python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. cosyvoice.proto
+ENV VLLM_NO_USAGE_STATS=1
